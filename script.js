@@ -58,7 +58,7 @@ const game = {
       if (target.closest('#start-game-btn')) this.ui.showScreen('char-select-screen');
       if (target.closest('#load-game-btn')) this.saveLoad.load();
       if (target.closest('#show-author-btn')) this.ui.showAuthorModal?.();
-      if (target.closest('#confirm-char-btn')) this.ui.showNameInputModal?.();
+      if (target.closest('#confirm-char-btn')) this.ui.showNameInputModal(); // Removed optional chaining
 
       if (target.closest('.char-card')) {
         document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
@@ -68,6 +68,69 @@ const game = {
 
       if (target.closest('#continue-to-game-btn')) this.ui.showScreen('hub-screen');
     });
+  },
+
+  // ---------------------- Game Start Logic ----------------------
+  startGame(classId, playerName) {
+    const classData = DATABASE.classes[classId];
+    if (!classData) {
+        console.error('無效的職業 ID:', classId);
+        return;
+    }
+
+    this.state.player = {
+        id: 'player',
+        isPlayer: true,
+        name: playerName,
+        class: classId,
+        level: 1,
+        exp: 0,
+        expToNext: 80, // Initial value
+        skillPoints: 1,
+        attributePoints: 0,
+        baseStats: JSON.parse(JSON.stringify(classData.stats)),
+        maxStats: {}, // recalculateStats will populate this
+        stats: {}, // recalculateStats will populate this
+        equipment: { weapon: null, armor: null, accessory: null, boots: null },
+        inventory: [],
+        activeEffects: [],
+        skills: { ...classData.skills },
+        completedQuests: [],
+        storyProgress: 'main01',
+        gold: 50
+    };
+
+    this.player.recalculateStats();
+    // Set current stats to max stats
+    this.state.player.stats = { ...this.state.player.maxStats };
+
+    this.ui.closeModal();
+
+    // Populate and show the story screen
+    const storyTitle = document.getElementById('story-title');
+    const storyText = document.getElementById('story-text');
+    if (storyTitle) storyTitle.textContent = `英雄的誕生：${playerName}`;
+    if (storyText) storyText.innerHTML = `<p>${classData.story}</p>`;
+    
+    this.ui.showScreen('story-screen');
+  },
+
+  confirmCharacterCreation() {
+    const nameInput = document.getElementById('player-name-input');
+    const playerName = nameInput?.value.trim() || '勇者';
+    const selectedCharCard = document.querySelector('.char-card.selected');
+    const classId = selectedCharCard?.dataset.id;
+
+    if (!classId) {
+        this.ui.showModal({
+            title: '錯誤',
+            body: '<p>請先選擇一個職業。</p>',
+            buttons: [{ text: '好的', fn: () => this.ui.closeModal() }]
+        });
+        return;
+    }
+
+    this.startGame(classId, playerName);
   },
 
   // ---------------------- Save/Load ----------------------
@@ -348,6 +411,21 @@ const game = {
     closeModal() {
       const modal = document.getElementById('modal');
       if (modal) modal.classList.add('hidden');
+    },
+    showNameInputModal() {
+      game.ui.showModal({
+        title: '決定你的名字',
+        body: `
+          <p class="mb-4 text-gray-400">請為你的英雄命名：</p>
+          <input type="text" id="player-name-input" class="w-full p-2 rounded bg-gray-900 text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500" maxlength="12" placeholder="最多12個字">
+        `,
+        buttons: [
+          { text: '返回', fn: () => game.ui.closeModal() },
+          { text: '開始遊戲', fn: () => game.confirmCharacterCreation(), class: 'bg-green-600 hover:bg-green-700 text-white' }
+        ]
+      });
+      // Auto-focus the input field
+      setTimeout(() => document.getElementById('player-name-input')?.focus(), 100);
     },
     showCombatLogMessage(msg, cls='') {
       const log = document.getElementById('combat-log');
